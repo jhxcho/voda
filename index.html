@@ -11,10 +11,7 @@
 <meta property="og:description" content="VODA — VOlumetric Depth-Aware supervision for 3D Gaussian segmentation. NeurIPS 2026, Yonsei University.">
 <meta property="og:url" content="https://jhxcho.github.io/voda/">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#131110" media="(prefers-color-scheme: dark)">
-
-<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='8'%20fill='%23D2691E'/%3E%3C/svg%3E">
+<meta name="theme-color" id="theme-color" content="#FFFFFF">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,25 +38,6 @@
   --shadow-lg:0 18px 50px rgba(60,40,28,.12);
 
   --wrap:1080px;
-}
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
-    --accent:#FF9E6E;
-    --accent-strong:#FFB088;
-    --accent-tint:rgba(255,158,110,.15);
-    --tag-ink:#17100C;
-    --glow-1:rgba(255,158,110,.60);
-    --glow-2:rgba(255,158,110,.30);
-
-    --bg:#131110;
-    --bg-alt:#1A1715;
-    --surface:#1C1917;
-    --border:#2E2825;
-    --text:#EFEBE8;
-    --text-soft:#A9A099;
-    --shadow:0 6px 24px rgba(0,0,0,.35);
-    --shadow-lg:0 18px 50px rgba(0,0,0,.5);
-  }
 }
 :root[data-theme="dark"]{
   --accent:#FF9E6E;
@@ -158,6 +136,8 @@ a.nav-link:hover{color:var(--text)}
   padding:0;
 }
 .theme-btn svg{width:16px;height:16px;fill:currentColor}
+/* `hidden` is an HTML attribute, so SVG needs the rule spelled out. */
+.theme-btn svg[hidden]{display:none}
 :focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:6px}
 
 /* ---------- hero ---------- */
@@ -437,15 +417,26 @@ h1.title .name:hover .ch{animation:wave .95s ease-in-out infinite}
   var sun = document.getElementById('icon-sun');
   var moon = document.getElementById('icon-moon');
 
+  var meta = document.getElementById('theme-color');
+
+  /* Light is the default. Dark only happens when the visitor asks for it,
+     so the OS setting is deliberately not consulted. */
   function isDark(){
-    var t = root.getAttribute('data-theme');
-    if (t) return t === 'dark';
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return root.getAttribute('data-theme') === 'dark';
+  }
+  /* Assigning .hidden does nothing on an SVG element, so toggle the
+     attribute. Dark shows the sun, light shows the moon: the icon is the
+     theme you get by clicking, and only one is ever in the button. */
+  function show(el, visible){
+    if (visible) el.removeAttribute('hidden');
+    else el.setAttribute('hidden', '');
   }
   function paint(){
     var dark = isDark();
-    sun.hidden = !dark;
-    moon.hidden = dark;
+    show(sun, dark);
+    show(moon, !dark);
+    btn.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
+    if (meta) meta.setAttribute('content', dark ? '#131110' : '#FFFFFF');
   }
 
   /* data-theme was already applied by the head script. */
@@ -456,10 +447,6 @@ h1.title .name:hover .ch{animation:wave .95s ease-in-out infinite}
     root.setAttribute('data-theme', next);
     try { localStorage.setItem('voda-theme', next); } catch (e) {}
     paint();
-  });
-
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(){
-    if (!root.getAttribute('data-theme')) paint();
   });
 })();
 </script>
