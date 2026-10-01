@@ -5,11 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>VODA</title>
 
+<meta name="description" content="A plug-and-play objective for volumetric 3D Gaussian segmentation. VODA supervises every Gaussian in the object's depth cluster, not only the ones the camera can see, so removing the selection actually changes the scene in 3D. NeurIPS 2026.">
+
 <meta property="og:type" content="website">
 <meta property="og:title" content="The Mask Is Not the Object: Volumetric Supervision for 3D Gaussian Segmentation">
+<meta property="og:description" content="A plug-and-play objective for volumetric 3D Gaussian segmentation. VODA supervises every Gaussian in the object's depth cluster, not only the ones the camera can see, so removing the selection actually changes the scene in 3D. NeurIPS 2026.">
 <meta property="og:url" content="https://jhxcho.github.io/voda/">
+<meta property="og:image" content="https://jhxcho.github.io/voda/assets/fig/teaser.jpg">
+<meta property="og:image:width" content="2000">
+<meta property="og:image:height" content="720">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://jhxcho.github.io/voda/assets/fig/teaser.jpg">
 <meta name="theme-color" id="theme-color" content="#FFFFFF">
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23D2691E'/%3E%3Cpath d='M9 9.5l7 14 7-14' fill='none' stroke='white' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -17,14 +26,15 @@
 
 <style>
 :root{
-  /* One orange for every filled shape (left rule, TL;DR tag) so they match. */
   --accent:#D2691E;
-  /* Deeper cut, for orange set as text on a light ground. */
-  --accent-strong:#A34F14;
+  --accent-fill:#AB5312;
+  --accent-strong:#99490F;
   --accent-tint:rgba(210,105,30,.13);
+  --accent-wash:#FBF0E8;
   --tag-ink:#FFFFFF;
   --glow-1:rgba(210,105,30,.42);
   --glow-2:rgba(210,105,30,.20);
+
 
   --bg:#FFFFFF;
   --bg-alt:#FAF7F5;
@@ -32,6 +42,10 @@
   --border:#EAE4E0;
   --text:#1F1B19;
   --text-soft:#6A625D;
+
+  --band:#F5F1ED;
+  --hl:rgba(210,105,30,.30);
+  --sel:rgba(210,105,30,.26);
   --shadow:0 6px 24px rgba(60,40,28,.07);
   --shadow-lg:0 18px 50px rgba(60,40,28,.12);
 
@@ -39,23 +53,32 @@
 }
 :root[data-theme="dark"]{
   --accent:#FF9E6E;
+  --accent-fill:#FF9E6E;
   --accent-strong:#FFB088;
   --accent-tint:rgba(255,158,110,.15);
+  --accent-wash:#2B221D;
   --tag-ink:#17100C;
   --glow-1:rgba(255,158,110,.60);
   --glow-2:rgba(255,158,110,.30);
 
-  --bg:#131110;
-  --bg-alt:#1A1715;
-  --surface:#1C1917;
-  --border:#2E2825;
+
+  --bg:#141110;
+  --band:#221D19;
+  --bg-alt:#241F1B;
+  --surface:#2E2825;
+  --border:#443D38;
   --text:#EFEBE8;
-  --text-soft:#A9A099;
+  --text-soft:#ABA29B;
+
+  --hl:rgba(255,158,110,.32);
+  --sel:rgba(255,158,110,.30);
   --shadow:0 6px 24px rgba(0,0,0,.35);
   --shadow-lg:0 18px 50px rgba(0,0,0,.5);
 }
 
 *{box-sizing:border-box}
+::selection{background:var(--sel);color:var(--text)}
+::-moz-selection{background:var(--sel);color:var(--text)}
 body{
   margin:0;
   font-family:"Inter","Helvetica Neue",Helvetica,Arial,sans-serif;
@@ -65,11 +88,7 @@ body{
   -webkit-font-smoothing:antialiased;
   -moz-osx-font-smoothing:grayscale;
 }
-.wrap{
-  max-width:var(--wrap);
-  margin:0 auto;
-  padding-inline:24px;
-}
+.wrap{max-width:var(--wrap);margin:0 auto;padding-inline:24px}
 
 /* ---------- nav ---------- */
 nav{
@@ -84,54 +103,20 @@ nav{
 @supports (backdrop-filter:blur(1px)){
   nav{background:color-mix(in srgb, var(--bg) 82%, transparent)}
 }
-/* Brand on the left; section links and the toggle grouped on the right,
-   pushed over by .nav-links' auto margin. */
-nav .wrap{
-  display:flex;
-  align-items:center;
-  gap:clamp(18px,3vw,34px);
-  height:54px;
-}
+nav .wrap{display:flex;align-items:center;gap:clamp(18px,3vw,34px);height:54px}
 .brand{
-  display:flex;
-  align-items:center;
-  gap:.5rem;
-  font-size:1.15rem;
-  font-weight:800;
-  letter-spacing:.5px;
-  color:var(--text);
-  text-decoration:none;
+  display:flex;align-items:center;gap:.5rem;
+  font-size:1.15rem;font-weight:800;letter-spacing:.5px;
+  color:var(--text);text-decoration:none;
 }
-.nav-links{
-  margin-left:auto;
-  display:flex;
-  align-items:center;
-  gap:clamp(14px,2.2vw,26px);
-  font-size:.95rem;
-}
-/* Section links are inert until the sections exist.
-   To activate one: <a class="nav-link" href="#method">Method</a> */
-.nav-link{
-  color:var(--text-soft);
-  opacity:.6;
-  text-decoration:none;
-  cursor:default;
-}
-a.nav-link{opacity:1;cursor:pointer}
-a.nav-link:hover{color:var(--text)}
-
+.nav-links{margin-left:auto;display:flex;align-items:center;gap:clamp(11px,1.7vw,19px);font-size:.9rem}
+.nav-link{color:var(--text-soft);text-decoration:none;white-space:nowrap}
+.nav-link:hover{color:var(--text)}
+.nav-link.current{color:var(--accent-strong);font-weight:600}
 .theme-btn{
-  width:36px;
-  height:36px;
-  flex:none;
-  border-radius:50%;
-  border:1px solid var(--border);
-  background:var(--surface);
-  color:var(--text);
-  cursor:pointer;
-  display:grid;
-  place-items:center;
-  padding:0;
+  width:36px;height:36px;flex:none;border-radius:50%;
+  border:1px solid var(--border);background:var(--surface);color:var(--text);
+  cursor:pointer;display:grid;place-items:center;padding:0;
 }
 .theme-btn svg{width:16px;height:16px;fill:currentColor}
 /* `hidden` is an HTML attribute, so SVG needs the rule spelled out. */
@@ -139,166 +124,570 @@ a.nav-link:hover{color:var(--text)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:6px}
 
 /* ---------- hero ---------- */
-header.hero{
-  padding-block:44px 34px;
-  text-align:center;
-}
+header.hero{padding-block:44px 34px;text-align:center}
 h1.title{
   margin:0 auto .85rem;
-  font-size:clamp(31px,6.4vw,58px);
-  line-height:1.03;
-  letter-spacing:-.038em;
-  text-wrap:balance;
+  font-size:clamp(31px,6.4vw,54px);
+  line-height:1.03;letter-spacing:-.038em;text-wrap:balance;
 }
 h1.title span{display:block}
 h1.title .line{font-weight:700}
-/* Lines two and three step down, so the opening line leads. */
-h1.title .name,
-h1.title .sub{font-size:.84em}
-/* Solid ink, lit from behind by the accent. inline-block so the hover
-   target hugs the words instead of the full centred line. */
+h1.title .name,h1.title .sub{font-size:.84em}
 h1.title .name{
-  display:inline-block;
-  font-weight:800;
-  color:var(--text);
+  display:inline-block;font-weight:800;color:var(--text);
   text-shadow:0 0 14px var(--glow-1), 0 0 38px var(--glow-2);
   transition:text-shadow .25s ease;
 }
-h1.title .name:hover{
-  text-shadow:0 0 12px var(--glow-1), 0 0 30px var(--glow-2), 0 0 64px var(--glow-2);
-}
-/* Characters are wrapped in .ch by the script below. */
-h1.title .name .ch{
-  display:inline-block;
-  will-change:transform;
-}
+h1.title .name:hover{text-shadow:0 0 12px var(--glow-1), 0 0 30px var(--glow-2), 0 0 64px var(--glow-2)}
+h1.title .name .ch{display:inline-block;will-change:transform}
 h1.title .name:hover .ch{animation:wave .95s ease-in-out infinite}
-@keyframes wave{
-  0%,100%{transform:translateY(0)}
-  50%{transform:translateY(-.07em)}
-}
+@keyframes wave{0%,100%{transform:translateY(0)}50%{transform:translateY(-.07em)}}
 
-.authors{
-  font-size:1.06rem;
-  font-weight:500;
-  margin:0 auto .2rem;
-}
-.authors a{
-  color:var(--text);
-  text-decoration:none;
-}
+.authors{font-size:1.06rem;font-weight:500;margin:0 auto .2rem}
+.authors a{color:var(--text);text-decoration:none}
 .authors a:hover{text-decoration:underline}
 .authors b{font-weight:600}
-.authors sup,.affil sup{
-  color:var(--accent-strong);
-  font-weight:700;
-  font-size:.62em;
-}
-.affil{
-  margin:0 auto 1.15rem;
-  font-size:1.02rem;
-  color:var(--text-soft);
-}
-/* A tinted chip above the title, so it reads as metadata rather than as a
-   second author line. */
+.affil{margin:0 auto 1.15rem;font-size:1.02rem;color:var(--text-soft)}
 .venue{
-  display:inline-block;
-  margin:0 0 1rem;
-  font-size:.92rem;
-  font-weight:600;
-  letter-spacing:.01em;
-  color:var(--accent-strong);
-  background:var(--accent-tint);
-  border-radius:999px;
-  padding:6px 17px;
+  display:inline-block;margin:0 0 1rem;
+  font-size:.92rem;font-weight:600;letter-spacing:.01em;
+  color:var(--accent-strong);background:var(--accent-tint);
+  border-radius:999px;padding:6px 17px;
 }
 
-/* ---------- buttons ---------- */
-.btns{
-  display:flex;
-  flex-wrap:wrap;
-  gap:.7rem;
-  justify-content:center;
-}
+.btns{display:flex;flex-wrap:wrap;gap:.7rem;justify-content:center}
 .btn{
-  display:inline-flex;
-  align-items:center;
-  gap:.5rem;
-  background:var(--surface);
-  color:var(--text);
-  padding:.65rem 1.25rem;
-  border-radius:999px;
-  font-weight:600;
-  font-size:.95rem;
-  border:1px solid var(--border);
-  box-shadow:var(--shadow);
-  text-decoration:none;
-  white-space:nowrap;
+  display:inline-flex;align-items:center;gap:.5rem;
+  background:var(--surface);color:var(--text);
+  padding:.65rem 1.25rem;border-radius:999px;
+  font-weight:600;font-size:.95rem;
+  border:1px solid var(--border);box-shadow:var(--shadow);
+  text-decoration:none;white-space:nowrap;
   transition:transform .18s ease, box-shadow .18s ease, border-color .2s ease;
 }
-.btn:hover{
-  transform:translateY(-2px);
-  box-shadow:var(--shadow-lg);
-  border-color:var(--accent);
-}
+.btn:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg);border-color:var(--accent)}
 .btn svg{width:16px;height:16px;flex:none;fill:currentColor}
-.btn .soon{
-  font-weight:400;
-  font-size:.8rem;
-  color:var(--text-soft);
-}
+.btn .soon{font-weight:400;font-size:.8rem;color:var(--text-soft)}
 /* Unavailable until released. When a link goes live, drop this class
    and swap the <span> for <a class="btn" href="...">. */
-.btn.disabled{
-  opacity:.55;
-  pointer-events:none;
-  box-shadow:none;
-}
+.btn.disabled{opacity:.55;pointer-events:none;box-shadow:none}
 
 /* ---------- TL;DR ---------- */
-.tldr{padding-bottom:56px}
 .tldr-box{
-  display:flex;
-  flex-direction:column;
-  align-items:flex-start;
-  gap:7px;
-  background:var(--bg-alt);
-  border:1px solid var(--border);
-  border-left:3px solid var(--accent);
-  border-radius:14px;
-  padding:17px 24px;
-  box-shadow:var(--shadow);
+  display:flex;flex-direction:column;align-items:flex-start;gap:7px;
+  background:var(--bg-alt);border:1px solid var(--border);
+  border-left:3px solid var(--accent);border-radius:14px;
+  padding:17px 24px;box-shadow:var(--shadow);
 }
 .tldr-tag{
-  display:inline-block;
-  background:var(--accent);
-  color:var(--tag-ink);
-  font-weight:700;
-  font-size:.72rem;
-  letter-spacing:.08em;
-  padding:.24rem .75rem;
-  border-radius:999px;
+  display:inline-block;background:var(--accent-fill);color:var(--tag-ink);
+  font-weight:700;font-size:.72rem;letter-spacing:.08em;
+  padding:.24rem .75rem;border-radius:999px;
 }
-.tldr-box p{
-  margin:0;
-  font-size:1.02rem;
-  line-height:1.55;
-  text-wrap:pretty;
+.tldr-box p{margin:0;font-size:1.02rem;line-height:1.55;text-wrap:pretty}
+.tldr-box b{color:var(--accent-strong);font-weight:600}
+
+/* ---------- sections ----------
+   One rhythm for the whole page: every block inside a section is separated
+   by --stack, and sections themselves by a rule. */
+section[id]{scroll-margin-top:58px}
+.sec{padding-block:clamp(48px,6vw,72px);border-top:1px solid var(--border)}
+/* Alternating bands break the page into blocks; cards inside stay on
+   --surface so they lift off the tint. */
+.sec.tinted{background:var(--band)}
+.sec > .wrap > * + *{margin-top:var(--stack,22px)}
+
+/* The head of a section is centred; its content is not. */
+.sec-head{text-align:center;max-width:70ch;margin-inline:auto;padding-bottom:4px}
+h2{
+  margin:0;font-size:clamp(25px,3.1vw,33px);font-weight:800;
+  letter-spacing:-.02em;line-height:1.18;
 }
-.tldr-box b{
-  color:var(--accent-strong);
-  font-weight:600;
+.sec-head .lede{margin:10px auto 0}
+/* The column is wide for the media; running text keeps its own measure. */
+.lede{margin:0;max-width:74ch;font-size:1.04rem;line-height:1.6;color:var(--text-soft);text-wrap:pretty}
+.lede b{color:var(--text);font-weight:600}
+/* One term per block may carry the accent underline. Spend it sparingly. */
+.u{
+  color:var(--text);font-weight:600;
+  background-image:linear-gradient(transparent 60%, var(--hl) 60%);
+  padding-inline:1px;
+}
+h3{
+  margin:0;font-size:.98rem;font-weight:700;letter-spacing:.02em;
+  text-transform:uppercase;color:var(--text-soft);
 }
 
-@media (max-width:700px){
-  /* With the links hidden, the toggle takes over the push to the right. */
+/* Blocks below the fold ease in. The class is added by script, so with
+   JavaScript off nothing is ever left hidden. */
+.reveal{opacity:0;transform:translateY(10px)}
+.reveal.in{opacity:1;transform:none;transition:opacity .5s ease, transform .5s ease}
+
+.rowhead{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 16px}
+
+/* ---------- contributions ----------
+   Three blocks in one row: the paper's own three contributions, so the
+   numerals carry real structure rather than decoration. */
+.contrib{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:14px;grid-template-columns:repeat(3,1fr);
+}
+@media (max-width:760px){.contrib{grid-template-columns:1fr}}
+.contrib li{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:16px;padding:18px 20px 20px;box-shadow:var(--shadow);
+  display:flex;flex-direction:column;gap:9px;
+}
+.contrib .n{
+  width:26px;height:26px;border-radius:8px;display:grid;place-items:center;
+  background:var(--accent-fill);color:var(--tag-ink);
+  font-size:.78rem;font-weight:800;font-variant-numeric:tabular-nums;
+}
+.contrib h4{margin:0;font-size:1rem;font-weight:700;letter-spacing:-.01em;color:var(--text)}
+.contrib p{margin:0;font-size:.93rem;line-height:1.55;color:var(--text-soft)}
+.contrib b{color:var(--text);font-weight:600}
+
+code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.92em}
+
+/* ---------- figures ----------
+   Paper figures are line art in black ink, so the image keeps a white plate in
+   both themes rather than inverting into an unreadable dark box. The plate is
+   on the image alone; the figure itself is an ordinary card. */
+.figure{
+  margin:0;border:1px solid var(--border);border-radius:16px;
+  overflow:hidden;background:var(--surface);box-shadow:var(--shadow);
+  padding:14px 14px 0;
+}
+.figure img{display:block;width:100%;height:auto;background:#FFFFFF;border-radius:9px}
+/* the caption still spans the card, so it is pulled back out of the padding */
+.figure > figcaption{margin:14px -14px 0}
+@media (max-width:640px){
+  .figure{padding:9px 9px 0}
+  .figure > figcaption{margin:9px -9px 0}
+}
+figcaption{
+  padding:11px 16px;font-size:.87rem;line-height:1.5;
+  color:var(--text-soft);border-top:1px solid var(--border);
+}
+figcaption b{color:var(--text);font-weight:600}
+
+/* ---------- media ---------- */
+.mgrid{display:grid;gap:10px;grid-template-columns:repeat(3,1fr)}
+.mgrid.two{grid-template-columns:repeat(2,1fr)}
+@media (max-width:640px){.mgrid,.mgrid.two{grid-template-columns:1fr}}
+.mcard{margin:0;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--surface);box-shadow:var(--shadow)}
+/* The clips load lazily, so the box is reserved up front: without this the
+   panels have no height until playback starts and every anchor below them
+   lands in the wrong place. */
+.mvid{overflow:hidden;background:var(--surface);line-height:0;aspect-ratio:986/728}
+.mvid > video,.mvid > img{display:block;width:100%;height:100%;object-fit:cover}
+#r3d-grid .cmp{aspect-ratio:960/540}
+.mcap{
+  display:flex;align-items:baseline;gap:8px;margin:0;
+  padding:8px 11px;font-size:.83rem;line-height:1.4;
+  border-top:1px solid var(--border);color:var(--text-soft);
+}
+.mcap b{color:var(--text);font-weight:600}
+.mcap .tag{margin-left:auto;font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.mcap .tag.name{text-transform:none;letter-spacing:0;font-size:.74rem}
+.mcard.ours{border-color:var(--accent)}
+.mcard.ours .mcap .tag{color:var(--accent-strong)}
+
+.hint{display:inline-flex;align-items:center;gap:7px;font-size:.8rem;color:var(--text-soft)}
+.hint svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;flex:none}
+
+/* ---------- before / after wipe ---------- */
+.cmp{position:relative;overflow:hidden;line-height:0;background:var(--surface);cursor:ew-resize;touch-action:pan-y}
+.cmp video.under{width:100%;height:100%;object-fit:cover}
+.cmp video{display:block;width:100%;height:auto}
+.cmp .over{position:absolute;inset:0;width:100%;height:100%;clip-path:inset(0 calc(100% - var(--pos,50%)) 0 0)}
+.cmp-line{position:absolute;top:0;bottom:0;left:var(--pos,50%);width:2px;background:var(--accent);pointer-events:none}
+.cmp-line::after{
+  content:"";position:absolute;top:50%;left:50%;
+  width:24px;height:24px;margin:-12px 0 0 -12px;border-radius:50%;
+  background:var(--accent);box-shadow:0 2px 8px rgba(0,0,0,.32);
+}
+.cmp-tag{
+  position:absolute;top:8px;
+  font-size:.68rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  background:rgba(20,16,14,.72);color:#fff;
+  padding:3px 9px;border-radius:999px;pointer-events:none;line-height:1.6;
+}
+.cmp-tag.l{left:8px}
+.cmp-tag.r{right:8px}
+
+/* ---------- magnifier row ----------
+   Hovering one panel magnifies every panel in the row about the same point,
+   so the comparison never drifts. A coarse pointer gets the plain images. */
+.zrow{display:grid;gap:10px;grid-template-columns:repeat(3,1fr)}
+.zrow.four{grid-template-columns:repeat(4,1fr)}
+@media (max-width:820px){.zrow.four{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:640px){.zrow{grid-template-columns:1fr}}
+.zbox{overflow:hidden;line-height:0;background:var(--surface)}
+.zbox img,
+[data-zoom] .mvid > video,
+[data-zoom] .mvid > img{
+  display:block;width:100%;
+  transform-origin:50% 50%;transition:transform .22s cubic-bezier(.2,.72,.3,1);
+}
+.zbox img{height:auto}
+@media (hover:hover) and (pointer:fine){
+  .zbox{cursor:zoom-in}
+  [data-zoom] .mvid:not(.no-loupe){cursor:zoom-in}
+}
+.zhint{
+  margin:0;font-size:.82rem;color:var(--text-soft);
+  display:flex;align-items:center;gap:7px;
+}
+.zhint svg{width:14px;height:14px;flex:none;fill:none;stroke:currentColor;stroke-width:1.9}
+@media (hover:none){.zhint{display:none}}
+.rowhead .ctl{
+  font-size:.74rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--text-soft);margin-left:6px;
+}
+
+/* The closing argument is a part of Motivation in its own right, not a
+   footnote under the clips, so it gets the same rule and heading weight that
+   separates the benchmark groups in Results. */
+.summary{border-top:1px solid var(--border);padding-top:32px;margin-top:34px}
+.summary > h3{
+  margin:0 0 20px;font-size:clamp(19px,2.2vw,24px);font-weight:800;
+  letter-spacing:-.02em;color:var(--text);text-transform:none;
+}
+.summary > * + *{margin-top:16px}
+.summary > .mot-grid + .insight{margin-top:16px}
+
+/* ---------- the argument ----------
+   Motivation closes on the contrast it was built for: the state of things, and
+   what we do instead. One accent, so the pair is told apart by weight rather
+   than by a second hue: the problem sits back in the neutral wash, our take
+   comes forward in the accent one. */
+.mot-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:760px){.mot-grid{grid-template-columns:1fr}}
+.mot-card{
+  border:1px solid var(--border);border-radius:16px;
+  padding:19px 22px;background:var(--surface);box-shadow:var(--shadow);
+}
+.mot-card.take{background:var(--accent-wash);border-color:var(--accent)}
+.mot-card h4{
+  margin:0 0 9px;font-size:.78rem;font-weight:800;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--text-soft);
+}
+.mot-card.take h4{color:var(--accent-strong)}
+.mot-card p{margin:0;font-size:.97rem;line-height:1.62;color:var(--text-soft)}
+.mot-card b{color:var(--text);font-weight:600}
+
+/* and the idea itself, at full width, in the shape the TL;DR box established */
+.insight{
+  display:flex;flex-direction:column;align-items:flex-start;gap:10px;
+  background:var(--surface);border:1px solid var(--border);
+  border-left:3px solid var(--accent);border-radius:16px;
+  padding:19px 24px;box-shadow:var(--shadow);
+}
+.insight p{margin:0;font-size:1.03rem;line-height:1.6;color:var(--text);text-wrap:pretty}
+.insight p > b:first-child{color:var(--accent-strong)}
+.insight b{font-weight:700}
+
+/* ---------- benchmark groups ----------
+   Results holds two kinds of benchmark and the difference between them is the
+   argument of the paper, so each kind gets a heading with real weight rather
+   than the small label the individual benchmarks use. */
+.bench{border-top:1px solid var(--border);padding-top:30px}
+.bench + .bench{margin-top:40px}
+.bench > * + *{margin-top:22px}
+.bench > .bench-head + *{margin-top:28px}
+.bench-head h3{
+  margin:0;font-size:clamp(20px,2.3vw,26px);font-weight:800;
+  letter-spacing:-.02em;color:var(--text);text-transform:none;
+}
+.bench-head p{margin:8px 0 0;font-size:1rem;line-height:1.6;color:var(--text-soft);max-width:72ch}
+.bench-head b{color:var(--text);font-weight:600}
+
+[hidden]{display:none !important}
+
+/* ---------- view switch ----------
+   The two standard benchmarks are the same shape of block, read one at a time,
+   so they share one frame and a switch picks which is in it. The knob is
+   measured from the pressed button, so the labels can differ in width. */
+.bench-title{display:flex;align-items:center;flex-wrap:wrap;gap:10px 18px}
+.switch{
+  position:relative;display:inline-flex;padding:3px;margin-left:auto;
+  border:1px solid var(--border);border-radius:999px;background:var(--surface);
+}
+.switch .knob{
+  position:absolute;left:0;top:3px;bottom:3px;width:0;border-radius:999px;
+  background:var(--accent-fill);pointer-events:none;
+  transition:transform .3s cubic-bezier(.3,.8,.3,1), width .3s cubic-bezier(.3,.8,.3,1);
+}
+.switch button{
+  position:relative;z-index:1;border:0;background:none;cursor:pointer;
+  padding:5px 15px;border-radius:999px;font:inherit;font-size:.84rem;font-weight:600;
+  color:var(--text-soft);white-space:nowrap;transition:color .2s ease;
+}
+.switch button:hover{color:var(--text)}
+.switch button[aria-pressed="true"]{color:var(--tag-ink)}
+@media (prefers-reduced-motion:reduce){.switch .knob{transition:none}}
+
+.viewin{animation:viewin .28s ease both}
+@keyframes viewin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+/* only one is on screen, so neither needs the divider that separates siblings */
+.bench .subsec{border-top:0;padding-top:0}
+
+/* ---------- segmented control ---------- */
+.seg{display:flex;gap:5px;flex-wrap:wrap}
+.seg button{
+  border:1px solid var(--border);background:var(--surface);color:var(--text-soft);
+  border-radius:8px;padding:6px 12px;font:inherit;font-size:.85rem;font-weight:600;
+  cursor:pointer;white-space:nowrap;
+}
+.seg button[aria-pressed="true"]{background:var(--accent-fill);border-color:var(--accent-fill);color:var(--tag-ink)}
+
+/* A table and the pictures under it answer different questions, so the
+   pictures get announced rather than just appearing. */
+.qhead{margin-top:4px}
+.qhead h3{margin:0 0 6px}
+.qhead p{margin:0;font-size:.95rem;line-height:1.55;color:var(--text-soft);max-width:74ch}
+.qhead b{color:var(--text);font-weight:600}
+
+/* ---------- query carousel ----------
+   Arrows step through, dots jump straight to one. The dots sit before the
+   name so the controls keep their place however long the query reads, and the
+   list grows by one dot rather than by another pill on a second line. */
+.carousel{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.cr-btn{
+  width:30px;height:30px;flex:none;border-radius:50%;
+  border:1px solid var(--border);background:var(--surface);color:var(--text-soft);
+  display:grid;place-items:center;cursor:pointer;padding:0;
+  transition:border-color .18s ease,color .18s ease;
+}
+.cr-btn:hover{border-color:var(--accent);color:var(--accent-strong)}
+.cr-btn svg{width:13px;height:13px;fill:none;stroke:currentColor;
+  stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round}
+.cr-dots{display:flex;align-items:center;gap:6px;margin-inline:3px}
+.cr-dot{
+  width:7px;height:7px;padding:0;border:0;border-radius:999px;
+  background:var(--border);cursor:pointer;
+  transition:width .24s cubic-bezier(.3,.8,.3,1),background .18s ease;
+}
+.cr-dot:hover{background:var(--text-soft)}
+.cr-dot[aria-selected="true"]{width:20px;background:var(--accent)}
+.cr-name{font-size:.95rem;font-weight:700;color:var(--text);white-space:nowrap}
+@media (prefers-reduced-motion:reduce){.cr-dot{transition:none}}
+
+/* ---------- tabs ---------- */
+.tabs{display:flex;flex-wrap:wrap;gap:7px}
+.tab{
+  border:1px solid var(--border);background:var(--surface);color:var(--text-soft);
+  border-radius:999px;padding:6px 14px;font:inherit;font-size:.87rem;font-weight:600;cursor:pointer;
+}
+.tab:hover{color:var(--text)}
+.tab[aria-selected="true"]{background:var(--accent-fill);border-color:var(--accent-fill);color:var(--tag-ink)}
+/* two-line tab: the operation, then the particular edit it runs */
+.tab.op{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:7px 17px;line-height:1.24}
+.tab.op .k{font-size:.88rem;font-weight:700;letter-spacing:-.005em}
+.tab.op .d{font-size:.73rem;font-weight:500;opacity:.68;white-space:nowrap}
+
+/* ---------- tables ----------
+   No row fills and no vertical rules: the VODA rows are marked by weight
+   and colour, and a single rule separates one baseline pair from the next. */
+.tbl-wrap{
+  overflow-x:auto;border:1px solid var(--border);border-radius:16px;
+  background:var(--surface);box-shadow:var(--shadow);
+}
+table.tbl{border-collapse:collapse;width:100%;font-size:.9rem;font-variant-numeric:tabular-nums}
+/* The block heading names the benchmark, so the caption only has to say what
+   the numbers are. */
+.tbl caption{
+  caption-side:top;text-align:left;padding:15px 20px 11px;
+  font-size:.87rem;font-weight:400;line-height:1.45;
+  color:var(--text-soft);max-width:78ch;
+}
+.tbl th,.tbl td{padding:9px 16px;text-align:right;white-space:nowrap}
+.tbl th:first-child,.tbl td:first-child{text-align:left;padding-left:20px}
+.tbl td:last-child,.tbl th:last-child{padding-right:20px}
+.tbl thead th{font-weight:600;font-size:.82rem;color:var(--text-soft)}
+.tbl thead tr:last-child th{border-bottom:1.5px solid var(--text-soft)}
+/* group label above a span of columns */
+.tbl thead .grp{
+  text-align:center;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--text-soft);padding-bottom:3px;
+}
+.tbl tbody tr:first-child td{padding-top:11px}
+.tbl tbody tr.grp td{border-top:1px solid var(--border)}
+.tbl tbody tr.ours td{color:var(--accent-strong);font-weight:700}
+.tbl tbody tr.ours td:first-child{padding-left:34px;position:relative}
+/* Two baselines side by side: the fourth column is a second Method column,
+   so it takes the same alignment, indent and marker as the first. */
+.tbl.pair th:nth-child(4),.tbl.pair td:nth-child(4){text-align:left;padding-left:44px}
+.tbl.pair tbody tr.ours td:nth-child(4){padding-left:58px;position:relative}
+.tbl.pair tbody tr.ours td:nth-child(4)::before{
+  content:"";position:absolute;left:44px;top:50%;
+  width:6px;height:6px;margin-top:-3px;border-radius:50%;background:var(--accent);
+}
+.tbl.pair tbody tr.grp td{border-top:1px solid var(--border)}
+
+.tbl tbody tr.ours td:first-child::before{
+  content:"";position:absolute;left:20px;top:50%;
+  width:6px;height:6px;margin-top:-3px;border-radius:50%;background:var(--accent);
+}
+.tbl tbody tr:last-child td{padding-bottom:13px}
+
+/* ---------- charts ---------- */
+.chart-grid{display:grid;gap:14px;grid-template-columns:1fr 1fr}
+@media (max-width:760px){.chart-grid{grid-template-columns:1fr}}
+.chartcard{
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:16px 20px 14px;box-shadow:var(--shadow);min-width:0;
+}
+.chartcard h4{margin:0;font-size:.98rem;font-weight:700;letter-spacing:-.01em;color:var(--text)}
+.chartcard .sub{margin:3px 0 12px;font-size:.84rem;line-height:1.45;color:var(--text-soft)}
+.chartcard svg{display:block;width:100%;height:auto;overflow:visible}
+
+/* ---------- sub-sections ----------
+   Analysis carries two findings of equal weight, so each gets the same
+   heading treatment and its own rule. */
+.subsec{border-top:1px solid var(--border);padding-top:26px}
+.subsec > * + *{margin-top:18px}
+
+/* ---------- framing aside ----------
+   The question a sub-section answers, kept folded until asked for. */
+.ask{margin:0}
+.ask button{
+  display:inline-flex;align-items:center;gap:10px;
+  margin:0;padding:0;border:0;background:none;cursor:pointer;text-align:left;
+  font:inherit;font-size:1.16rem;font-weight:800;letter-spacing:-.015em;
+  color:var(--text);
+}
+.ask button:hover{color:var(--accent-strong)}
+/* the section it sits in may itself be tinted, so the badge carries the
+   accent wash rather than the band colour */
+.ask .mark{
+  width:22px;height:22px;border-radius:50%;flex:none;
+  display:grid;place-items:center;
+  background:var(--accent-tint);color:var(--accent-strong);
+  font-size:.76rem;font-weight:800;line-height:1;
+  transition:background .15s ease,color .15s ease;
+}
+.ask button:hover .mark{background:var(--accent-fill);color:var(--tag-ink)}
+.ask button[aria-expanded="true"]{color:var(--accent-strong)}
+.ask button[aria-expanded="true"] .mark{background:var(--accent-fill);color:var(--tag-ink)}
+/* Collapsible: the grid row animates from 0fr to 1fr, so the block
+   grows and shrinks instead of snapping in and out. */
+.fold{
+  display:grid;grid-template-rows:0fr;opacity:0;visibility:hidden;
+  transition:grid-template-rows .3s ease, opacity .24s ease, visibility 0s .3s;
+}
+.fold.open{
+  grid-template-rows:1fr;opacity:1;visibility:visible;
+  transition:grid-template-rows .3s ease, opacity .24s ease, visibility 0s;
+}
+.fold > div{overflow:hidden;min-height:0}
+.sec > .wrap > .fold:not(.open),
+.subsec > .fold:not(.open){margin-top:0}
+.aside{
+  display:flex;gap:14px;align-items:flex-start;
+  border:1px solid var(--border);border-radius:14px;
+  background:var(--surface);padding:16px 20px;box-shadow:var(--shadow);
+}
+.aside .q{
+  flex:none;width:28px;height:28px;border-radius:50%;
+  display:grid;place-items:center;
+  background:var(--accent-tint);color:var(--accent-strong);
+  font-size:1rem;font-weight:800;line-height:1;
+}
+.aside p{margin:0;font-size:.95rem;line-height:1.6;color:var(--text-soft);max-width:78ch}
+.aside b{color:var(--text);font-weight:700}
+
+/* ---------- alternatives explorer ----------
+   Each row is a control: selecting one marks it in both cards and swaps
+   the panel underneath, which points back up at the selection. */
+.alt > * + *{margin-top:14px}
+.alt > .fold:not(.open){margin-top:0}
+.alt-hint{
+  display:flex;align-items:center;gap:8px;margin:0;
+  font-size:.88rem;color:var(--accent-strong);font-weight:600;
+}
+.alt-hint svg{width:15px;height:15px;flex:none;fill:none;stroke:currentColor;stroke-width:1.9}
+ul.bars{list-style:none;margin:0;padding:0;display:grid;gap:3px}
+ul.bars li{margin:0}
+.bar{
+  position:relative;
+  display:grid;grid-template-columns:78px 1fr 52px 12px;align-items:center;gap:9px;
+  width:100%;padding:8px 8px 8px 13px;border:0;border-radius:9px;
+  background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;
+  transition:background .15s ease;
+}
+.bar::before{
+  content:"";position:absolute;left:2px;top:8px;bottom:8px;
+  width:3px;border-radius:2px;background:transparent;transition:background .15s ease;
+}
+.bar:hover{background:var(--bg-alt);background:color-mix(in srgb, var(--text) 8%, var(--surface))}
+.bar[aria-expanded="true"]{background:var(--accent-tint)}
+.bar[aria-expanded="true"]::before{background:var(--accent)}
+.bar .nm{font-size:.88rem;font-weight:600;color:var(--text)}
+.bar .track{height:15px;border-radius:5px;background:var(--border);overflow:hidden}
+.bar .fill{display:block;height:100%;border-radius:5px;background:var(--text-soft);opacity:.55;transition:width .35s ease}
+.bar .vl{font-size:.84rem;color:var(--text-soft);text-align:right;font-variant-numeric:tabular-nums}
+.bar .go{
+  font-size:.9rem;line-height:1;color:var(--text-soft);opacity:0;
+  transition:opacity .15s ease,transform .15s ease;
+}
+.bar:hover .go{opacity:.65}
+.bar[aria-expanded="true"] .go{opacity:1;color:var(--accent-strong);transform:translateX(2px)}
+.bar.ours .nm{color:var(--accent-strong);font-weight:700}
+.bar.ours .fill{background:var(--accent);opacity:1}
+.bar.ours .vl{color:var(--accent-strong);font-weight:700}
+
+.altnote{
+  position:relative;
+  border:1px solid var(--accent);border-left-width:3px;border-radius:12px;
+  background:var(--accent-wash);padding:15px 18px;
+  font-size:.93rem;line-height:1.58;color:var(--text);
+}
+/* the caret ties the panel back to the rows above it */
+.altnote::before{
+  content:"";position:absolute;top:-8px;left:46px;
+  width:14px;height:14px;transform:rotate(45deg);
+  background:var(--accent-wash);
+  border-left:1px solid var(--accent);border-top:1px solid var(--accent);
+}
+.altnote b{font-weight:700}
+.altnote .who{
+  display:block;font-size:1rem;font-weight:800;letter-spacing:-.01em;
+  color:var(--accent-strong);margin-bottom:5px;
+}
+
+/* ---------- bibtex ---------- */
+
+/* ---------- placeholder ----------
+   Named apart from the "soon" label inside .btn, which is a different thing. */
+.pending{
+  border:1px dashed var(--border);border-radius:16px;
+  background:var(--surface);padding:28px 22px;text-align:center;
+}
+.pending p{margin:0;color:var(--text-soft);font-size:.95rem;line-height:1.55;max-width:56ch;margin-inline:auto}
+.pending .t{font-size:1.04rem;font-weight:700;color:var(--text);margin-bottom:5px}
+.pending .tag{
+  display:inline-block;margin-top:14px;padding:4px 13px;border-radius:999px;
+  background:var(--accent-tint);color:var(--accent-strong);
+  font-size:.76rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+}
+
+footer{padding-block:26px 40px;font-size:.86rem;color:var(--text-soft);text-align:center;border-top:1px solid var(--border)}
+footer p{margin:0}
+footer .credit{margin-top:5px;font-size:.82rem}
+footer a{color:var(--text-soft);text-decoration:underline;text-underline-offset:2px}
+footer a:hover{color:var(--text)}
+
+@media (max-width:760px){
   .nav-links{display:none}
   .theme-btn{margin-left:auto}
   header.hero{padding-block:34px 28px}
 }
 @media (prefers-reduced-motion:reduce){
-  *{transition:none !important;animation:none !important}
+  *{transition:none !important;animation:none !important;scroll-behavior:auto !important}
 }
+html{scroll-behavior:smooth}
 </style>
 
 <script>
@@ -316,15 +705,14 @@ h1.title .name:hover .ch{animation:wave .95s ease-in-out infinite}
 <nav>
   <div class="wrap">
     <a class="brand" href="#top">VODA</a>
-
     <div class="nav-links">
-      <span class="nav-link">Motivation</span>
-      <span class="nav-link">Method</span>
-      <span class="nav-link">Results</span>
-      <span class="nav-link">Removal-3D</span>
-      <span class="nav-link">BibTeX</span>
+      <a class="nav-link" href="#motivation">Motivation</a>
+      <a class="nav-link" href="#method">Method</a>
+      <a class="nav-link" href="#results">Results</a>
+      <a class="nav-link" href="#analysis">Analysis</a>
+      <a class="nav-link" href="#applications">Applications</a>
+      <a class="nav-link" href="#bibtex">BibTeX</a>
     </div>
-
     <button class="theme-btn" id="theme-btn" type="button" aria-label="Toggle dark mode">
       <svg id="icon-sun" viewBox="0 0 16 16" aria-hidden="true" hidden><path d="M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6Zm0-9.6a.7.7 0 0 1 .7.7v1.3a.7.7 0 0 1-1.4 0V2.1a.7.7 0 0 1 .7-.7Zm0 10.5a.7.7 0 0 1 .7.7v1.3a.7.7 0 0 1-1.4 0v-1.3a.7.7 0 0 1 .7-.7ZM14.6 8a.7.7 0 0 1-.7.7h-1.3a.7.7 0 0 1 0-1.4h1.3a.7.7 0 0 1 .7.7ZM4.1 8a.7.7 0 0 1-.7.7H2.1a.7.7 0 0 1 0-1.4h1.3a.7.7 0 0 1 .7.7Zm8.56-4.66a.7.7 0 0 1 0 1L11.73 5.2a.7.7 0 1 1-1-1l.93-.93a.7.7 0 0 1 1 0ZM5.27 10.73a.7.7 0 0 1 0 1l-.93.93a.7.7 0 0 1-1-1l.93-.93a.7.7 0 0 1 1 0Zm7.39 1.93a.7.7 0 0 1-1 0l-.93-.93a.7.7 0 1 1 1-1l.93.93a.7.7 0 0 1 0 1ZM5.27 5.27a.7.7 0 0 1-1 0l-.93-.93a.7.7 0 0 1 1-1l.93.93a.7.7 0 0 1 0 1Z"/></svg>
       <svg id="icon-moon" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.7 9.9A6.2 6.2 0 0 1 6.1 2.3a.7.7 0 0 0-.9-.86 7.1 7.1 0 1 0 9.36 9.36.7.7 0 0 0-.86-.9Z"/></svg>
@@ -334,7 +722,6 @@ h1.title .name:hover .ch{animation:wave .95s ease-in-out infinite}
 
 <header class="hero" id="top">
   <div class="wrap">
-
     <p class="venue">NeurIPS 2026</p>
 
     <h1 class="title">
@@ -356,27 +743,23 @@ h1.title .name:hover .ch{animation:wave .95s ease-in-out infinite}
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 0H3.5A1.5 1.5 0 0 0 2 1.5v13A1.5 1.5 0 0 0 3.5 16h9a1.5 1.5 0 0 0 1.5-1.5V4.5L9.5 0Zm0 1.75L12.25 4.5H10a.5.5 0 0 1-.5-.5V1.75ZM4.75 7.5h6.5a.6.6 0 0 1 0 1.2h-6.5a.6.6 0 0 1 0-1.2Zm0 3h6.5a.6.6 0 0 1 0 1.2h-6.5a.6.6 0 0 1 0-1.2Zm0-6h2.5a.6.6 0 0 1 0 1.2h-2.5a.6.6 0 0 1 0-1.2Z"/></svg>
         Paper <span class="soon">soon</span>
       </span>
-
       <span class="btn disabled" title="Coming soon">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.4 1.3 8 6.9l5.6-5.6 1.4 1.4L9.4 8.3l5.6 5.6-1.4 1.4L8 9.7l-5.6 5.6-1.4-1.4 5.6-5.6L1 2.7l1.4-1.4Z"/></svg>
         arXiv <span class="soon">soon</span>
       </span>
-
       <span class="btn disabled" title="Coming soon">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
         Code <span class="soon">soon</span>
       </span>
-
       <span class="btn disabled" title="Coming soon">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.6 13.2h1.9V8.4H1.6v4.8Zm3.5 0H7V3.1H5.1v10.1Zm3.5 0h1.9V6.2H8.6v7Zm3.5 0H14V9.9h-1.9v3.3ZM.6 15.4h14.8a.6.6 0 0 0 0-1.2H.6a.6.6 0 0 0 0 1.2Z"/></svg>
         Removal-3D <span class="soon">soon</span>
       </span>
     </div>
-
   </div>
 </header>
 
-<section class="tldr">
+<section style="padding-bottom:8px">
   <div class="wrap">
     <div class="tldr-box">
       <span class="tldr-tag">TL;DR</span>
@@ -391,9 +774,659 @@ h1.title .name:hover .ch{animation:wave .95s ease-in-out infinite}
   </div>
 </section>
 
+
+<!-- ==================== CONTRIBUTIONS ==================== -->
+<section class="sec" id="contributions" style="border-top:0">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Contributions</h2>
+    </div><ol class="contrib">
+      <li>
+        <span class="n">1</span>
+        <h4>Volumetric segmentation</h4>
+        <p>
+          We formulate the task, showing how an accurate rendered mask can still correspond to
+          a Gaussian set that <b>fails to account for the object in 3D</b>.
+        </p>
+      </li>
+      <li>
+        <span class="n">2</span>
+        <h4>VODA</h4>
+        <p>
+          A plug-and-play objective that supervises <b>every Gaussian in the selected depth
+          cluster</b> directly, leaving the baseline's representation and inference untouched.
+        </p>
+      </li>
+      <li>
+        <span class="n">3</span>
+        <h4>Removal-3D</h4>
+        <p>
+          A benchmark and the <b>Removal Depth Error</b> for depth-based removal evaluation,
+          with consistent gains across <b>four baselines</b>.
+        </p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+
+<!-- ==================== MOTIVATION ==================== -->
+<section class="sec tinted" id="motivation">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Motivation</h2>
+      <p class="lede">
+      <span class="u">A mask can be right and the selection still wrong.</span> Ask for the &ldquo;sheep&rdquo;
+      and you get Gaussians whose rendered mask looks correct. Delete them and the sheep is
+      still there.
+    </p>
+    </div>
+
+    <figure class="figure">
+      <img src="assets/fig/teaser.jpg" alt="For the query sheep, the selected Gaussians render a plausible 2D mask, yet removing them barely changes the rendered depth in the sheep region." loading="lazy" width="2000" height="720">
+      <figcaption>
+        The selection projects to a convincing silhouette, but removing it leaves the depth in
+        the sheep region almost unchanged. The surfaces behind never appear.
+      </figcaption>
+    </figure>
+
+    <div class="rowhead">
+      <div class="carousel" data-grid="motiv-grid" aria-label="Query">
+        <button class="cr-btn" type="button" data-step="-1" aria-label="Previous"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <button class="cr-btn" type="button" data-step="1" aria-label="Next"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+        <div class="cr-dots" role="tablist" aria-label="Query">
+          <button class="cr-dot" type="button" role="tab" data-value="green_apple" data-label="green apple" aria-selected="true" aria-label="green apple"></button>
+          <button class="cr-dot" type="button" role="tab" data-value="pink_ice_cream" data-label="pink ice cream" aria-selected="false" aria-label="pink ice cream"></button>
+          <button class="cr-dot" type="button" role="tab" data-value="toy_elephant" data-label="toy elephant" aria-selected="false" aria-label="toy elephant"></button>
+        </div>
+        <span class="cr-name">green apple</span>
+      </div>
+    </div>
+
+      <p class="zhint">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M16 16l5 5M11 8v6M8 11h6"/></svg>
+        Hover a panel to magnify, all three follow the same point.
+      </p>
+    <div class="mgrid" id="motiv-grid" data-zoom="2.2">
+      <div class="mcard">
+        <div class="mvid"><video data-src="assets/video/lerf/{scene}_base_seg.mp4" muted loop playsinline preload="none"></video></div>
+        <p class="mcap"><b>Rendered mask</b><span class="tag">baseline</span></p>
+      </div>
+      <div class="mcard">
+        <div class="mvid"><video data-src="assets/video/lerf/{scene}_base.mp4" muted loop playsinline preload="none"></video></div>
+        <p class="mcap"><b>After removal</b><span class="tag">baseline</span></p>
+      </div>
+      <div class="mcard ours">
+        <div class="mvid"><video data-src="assets/video/lerf/{scene}_ours.mp4" muted loop playsinline preload="none"></video></div>
+        <p class="mcap"><b>After removal</b><span class="tag">+ VODA</span></p>
+      </div>
+    </div>
+
+    <div class="summary">
+      <h3>What has to change</h3>
+
+      <div class="mot-grid">
+        <div class="mot-card">
+          <h4>The problem</h4>
+          <p>Supervision is scaled by how much a Gaussian contributes to the render, and that
+          contribution collapses behind the first opaque surface. The interior of an object is
+          <b>never asked to belong to it</b>, so the mask comes out right and the set comes out
+          <b>hollow</b>.</p>
+        </div>
+        <div class="mot-card take">
+          <h4>Our take</h4>
+          <p>Choosing the dominant contributor per pixel, or its top-k, still answers
+          <b>which Gaussian explains a pixel</b>. The question worth asking is <b>which Gaussians
+          make up the object</b>, and it belongs along the ray rather than on the image plane.</p>
+        </div>
+      </div>
+
+      <div class="insight">
+        <span class="tldr-tag">Key idea</span>
+        <p><b>Volumetric supervision.</b> Split each ray where the depth jumps, keep the cluster the
+        object actually occupies, and supervise every Gaussian in it directly, whatever it
+        contributes to the image. Occluded Gaussians inherit the target of the visible ones they
+        sit behind.</p>
+      </div>
+
+      <p class="lede" style="font-size:.98rem">VODA turns this into two pieces that attach to an
+      existing baseline: a <b>depth-aware rasterizer</b> and a <b>direct per-Gaussian loss</b>.</p>
+    </div>
+  </div>
+</section>
+
+
+<!-- ==================== METHOD ==================== -->
+<section class="sec" id="method">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Method</h2>
+      <p class="lede">
+      Feature gradients are scaled by rendering weight
+      <span class="mono">w<sub>i</sub> = T<sub>i</sub>&thinsp;&alpha;<sub>i</sub></span>, so
+      anything behind the first opaque surface learns almost nothing. VODA splits each ray at
+      <b>depth gaps</b> above an adaptive <span class="mono">&tau;</span>, keeps the cluster
+      with the most contribution, and supervises <span class="u">every Gaussian in it</span> directly.
+    </p>
+    </div>
+
+    <figure class="figure">
+      <img src="assets/fig/rasterizer.jpg" alt="Selection along a single ray under three strategies: contribution-weighted rendering, top-k contributors, and depth-cluster selection." loading="lazy" width="2000" height="849">
+      <figcaption>
+        <b>Three ways to pick Gaussians on one ray.</b> Contribution-weighted rendering and
+        top-k selection both stop at the visible surface; the depth cluster keeps going. On the
+        right, transmittance collapses while the object's own Gaussians continue past it.
+      </figcaption>
+    </figure>
+
+    <div class="pending">
+      <p class="t">Interactive walkthrough</p>
+      <p>Depth clustering along a single ray, and the cluster viewer for a real scene.</p>
+      <p class="tag">Coming soon</p>
+    </div>
+
+    <div class="rowhead">
+      <h3>What one pixel reaches</h3>
+    </div>
+      <p class="zhint">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M16 16l5 5M11 8v6M8 11h6"/></svg>
+        Hover either render to magnify. The probed view on the left stays as it is.
+      </p>
+    <div class="mgrid" id="probe-grid" data-zoom="2.2">
+      <div class="mcard">
+        <div class="mvid no-loupe"><img src="assets/fig/probe_view.jpg" alt="The rendered scene with a ring marking the probed pixel." loading="lazy" width="986" height="728"></div>
+        <p class="mcap"><b>Probed pixel</b><span class="tag">x 447, y 196</span></p>
+      </div>
+      <div class="mcard">
+        <div class="mvid"><video data-src="assets/video/probe/base.mp4" muted loop playsinline preload="none"></video></div>
+        <p class="mcap"><b>55 Gaussians</b><span class="tag">baseline</span></p>
+      </div>
+      <div class="mcard ours">
+        <div class="mvid"><video data-src="assets/video/probe/ours.mp4" muted loop playsinline preload="none"></video></div>
+        <p class="mcap"><b>497 Gaussians</b><span class="tag">+ VODA</span></p>
+      </div>
+    </div>
+    <p class="lede" style="font-size:.92rem">
+      For that single pixel the baseline supervises <b>55</b> Gaussians, the thin magenta shell
+      at the front surface. VODA supervises <b>497</b>, keeping 54 of the same 55 and adding the
+      purple mass behind them.
+    </p>
+
+    <figure class="figure">
+      <img src="assets/fig/method.jpg" alt="VODA pipeline: a depth-aware rasterizer clusters per-pixel contributors, and the rendered feature is applied as a direct per-Gaussian target." loading="lazy" width="2200" height="938">
+      <figcaption>
+        The baseline loss keeps running and anchors the targets; VODA adds the depth-aware
+        rasterizer and the direct per-Gaussian term. Inference is untouched.
+      </figcaption>
+    </figure>
+  </div>
+</section>
+
+
+<!-- ==================== RESULTS ==================== -->
+<section class="sec tinted" id="results">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Results</h2>
+      <p class="lede">
+      VODA is attached to two self-supervised baselines (<b>OpenGaussian</b>, <b>LaGa</b>) and
+      two supervised ones (<b>Gaussian Grouping</b>, <b>ILGS</b>), and measured on
+      <span class="u">two kinds of benchmark</span>.
+    </p>
+    </div>
+
+    <div class="bench" id="standard">
+      <div class="bench-head">
+        <div class="bench-title">
+          <h3>Standard benchmarks</h3>
+          <div class="switch" role="group" aria-label="Standard benchmark" data-view-group="standard">
+            <span class="knob" aria-hidden="true"></span>
+            <button type="button" data-view="lerf" aria-pressed="true">LERF</button>
+            <button type="button" data-view="scannet" aria-pressed="false">ScanNet</button>
+          </div>
+        </div>
+        <p>They score a <b>rendered mask</b> or a <b>visible surface label</b>.
+        <span class="u">A selection can do well here and still be hollow</span>, because nothing
+        behind the first visible surface is ever looked at.</p>
+      </div>
+
+    <div class="subsec" data-view-body="lerf">
+
+    <div class="tbl-wrap">
+      <table class="tbl pair">
+        <caption>3D object selection from a text query, mean over four scenes</caption>
+        <thead>
+          <tr>
+            <th class="grp" colspan="3" scope="col">Self-supervised</th>
+            <th class="grp" colspan="3" scope="col">Supervised</th>
+          </tr>
+          <tr>
+            <th scope="col">Method</th><th scope="col">mIoU &uarr;</th><th scope="col">mAcc@0.25 &uarr;</th>
+            <th scope="col">Method</th><th scope="col">mIoU &uarr;</th><th scope="col">mAcc@0.25 &uarr;</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>OpenGaussian</td><td>37.12</td><td>56.65</td><td>Gaussian Grouping</td><td>22.75</td><td>46.43</td></tr>
+          <tr class="ours"><td>+ VODA</td><td>42.98</td><td>57.84</td><td>+ VODA</td><td>43.73</td><td>76.27</td></tr>
+          <tr class="grp"><td>LaGa</td><td>56.80</td><td>76.33</td><td>ILGS</td><td>30.00</td><td>50.00</td></tr>
+          <tr class="ours"><td>+ VODA</td><td>60.28</td><td>82.56</td><td>+ VODA</td><td>49.62</td><td>81.48</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+
+      <div class="qhead">
+        <h3>Qualitative</h3>
+        <p>Each panel renders only the Gaussians the method selected. A set that misses the interior renders the object <b>thin and smeared</b>.</p>
+      </div>
+
+      <div class="rowhead">
+        <div class="carousel" data-zoomgrid="lerf-zoom" aria-label="LERF query">
+          <button class="cr-btn" type="button" data-step="-1" aria-label="Previous"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+          <button class="cr-btn" type="button" data-step="1" aria-label="Next"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+          <div class="cr-dots" role="tablist" aria-label="LERF query">
+            <button class="cr-dot" type="button" role="tab" data-value="pikachu" data-label="&ldquo;Pikachu&rdquo;" aria-selected="true" aria-label="Pikachu"></button>
+            <button class="cr-dot" type="button" role="tab" data-value="ottolenghi" data-label="&ldquo;Ottolenghi&rdquo;" aria-selected="false" aria-label="Ottolenghi"></button>
+            <button class="cr-dot" type="button" role="tab" data-value="duck" data-label="&ldquo;Rubber duck with buoy&rdquo;" aria-selected="false" aria-label="Rubber duck with buoy"></button>
+            <button class="cr-dot" type="button" role="tab" data-value="icecream" data-label="&ldquo;Pink ice cream&rdquo;" aria-selected="false" aria-label="Pink ice cream"></button>
+          </div>
+          <span class="cr-name">&ldquo;Pikachu&rdquo;</span>
+        </div>
+      </div>
+
+      <p class="zhint">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M16 16l5 5M11 8v6M8 11h6"/></svg>
+        Hover a panel to magnify, all three follow the same point.
+      </p>
+
+      <div class="zrow" id="lerf-zoom" data-zoom="2.4">
+        <figure class="mcard">
+          <div class="zbox"><img src="assets/img/lerf/pikachu_gt.jpg" alt="The queried object as it appears in the reconstruction." width="998" height="737" loading="lazy"></div>
+          <figcaption class="mcap"><b>Ground truth</b><span class="tag">reference</span></figcaption>
+        </figure>
+        <figure class="mcard">
+          <div class="zbox"><img src="assets/img/lerf/pikachu_opengs_org.jpg" alt="The object rendered from the Gaussians the baseline selected." width="998" height="737" loading="lazy"></div>
+          <figcaption class="mcap"><b>Selected set</b><span class="tag name">OpenGaussian</span></figcaption>
+        </figure>
+        <figure class="mcard ours">
+          <div class="zbox"><img src="assets/img/lerf/pikachu_opengs_voda.jpg" alt="The object rendered from the Gaussians VODA selected." width="998" height="737" loading="lazy"></div>
+          <figcaption class="mcap"><b>Selected set</b><span class="tag">+ VODA</span></figcaption>
+        </figure>
+      </div>
+    </div>
+
+    <div class="subsec" data-view-body="scannet">
+
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <caption>3D semantic segmentation from a text query, point-cloud metrics</caption>
+        <thead>
+          <tr>
+            <th rowspan="2" scope="col">Method</th>
+            <th class="grp" colspan="2" scope="col">19 classes</th>
+            <th class="grp" colspan="2" scope="col">15 classes</th>
+            <th class="grp" colspan="2" scope="col">10 classes</th>
+          </tr>
+          <tr>
+            <th scope="col">mIoU &uarr;</th><th scope="col">mAcc &uarr;</th>
+            <th scope="col">mIoU &uarr;</th><th scope="col">mAcc &uarr;</th>
+            <th scope="col">mIoU &uarr;</th><th scope="col">mAcc &uarr;</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>OpenGaussian</td><td>26.20</td><td>39.35</td><td>28.00</td><td>42.67</td><td>34.57</td><td>48.38</td></tr>
+          <tr class="ours"><td>+ VODA</td><td>29.00</td><td>42.80</td><td>29.43</td><td>44.38</td><td>36.89</td><td>50.69</td></tr>
+          <tr class="grp"><td>LaGa</td><td>32.20</td><td>47.35</td><td>37.19</td><td>53.88</td><td>43.06</td><td>61.31</td></tr>
+          <tr class="ours"><td>+ VODA</td><td>33.20</td><td>49.63</td><td>37.21</td><td>55.59</td><td>45.53</td><td>65.24</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+
+      <div class="qhead">
+        <h3>Qualitative</h3>
+        <p>Points the method assigned to the queried class, against the ground truth. The failure to look for is <b>leakage into the neighbours</b>.</p>
+      </div>
+
+      <div class="rowhead">
+        <div class="carousel" data-zoomgrid="scannet-zoom" aria-label="ScanNet query">
+          <button class="cr-btn" type="button" data-step="-1" aria-label="Previous"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+          <button class="cr-btn" type="button" data-step="1" aria-label="Next"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+          <div class="cr-dots" role="tablist" aria-label="ScanNet query">
+            <button class="cr-dot" type="button" role="tab" data-value="bed" data-label="&ldquo;Bed&rdquo;" aria-selected="true" aria-label="Bed"></button>
+            <button class="cr-dot" type="button" role="tab" data-value="sofa" data-label="&ldquo;Sofa&rdquo;" aria-selected="false" aria-label="Sofa"></button>
+          </div>
+          <span class="cr-name">&ldquo;Bed&rdquo;</span>
+        </div>
+        <span class="ctl">baseline</span>
+        <div class="seg" role="group" aria-label="Baseline">
+          <button type="button" data-method="opengs" aria-pressed="true">OpenGaussian</button>
+          <button type="button" data-method="laga" aria-pressed="false">LaGa</button>
+        </div>
+      </div>
+
+      <p class="zhint">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M16 16l5 5M11 8v6M8 11h6"/></svg>
+        Hover a panel to magnify, all four follow the same point.
+      </p>
+
+      <div class="zrow four" id="scannet-zoom" data-zoom="2.3">
+        <figure class="mcard">
+          <div class="zbox"><img src="assets/img/scannet/bed_mesh.jpg" alt="The reconstructed scene mesh." width="393" height="322" loading="lazy"></div>
+          <figcaption class="mcap"><b>Reference mesh</b><span class="tag">scene</span></figcaption>
+        </figure>
+        <figure class="mcard">
+          <div class="zbox"><img src="assets/img/scannet/bed_gt.jpg" alt="Ground-truth points for the queried class." width="393" height="322" loading="lazy"></div>
+          <figcaption class="mcap"><b>Ground truth</b><span class="tag">labels</span></figcaption>
+        </figure>
+        <figure class="mcard">
+          <div class="zbox"><img src="assets/img/scannet/bed_opengs_org.jpg" alt="Points the baseline assigned to the queried class." width="393" height="322" loading="lazy"></div>
+          <figcaption class="mcap"><b>Predicted</b><span class="tag name">OpenGaussian</span></figcaption>
+        </figure>
+        <figure class="mcard ours">
+          <div class="zbox"><img src="assets/img/scannet/bed_opengs_voda.jpg" alt="Points VODA assigned to the queried class." width="393" height="322" loading="lazy"></div>
+          <figcaption class="mcap"><b>Predicted</b><span class="tag">+ VODA</span></figcaption>
+        </figure>
+      </div>
+    </div>
+    </div>
+
+    <div class="bench" id="removal3d">
+      <div class="bench-head">
+        <h3>Volumetric benchmark</h3>
+        <p><span class="u">Removal-3D scores the hole, not the silhouette.</span> A synthetic
+        indoor benchmark of three scenes with <b>paired depth maps</b>, before and after the
+        ground-truth object is removed.</p>
+      </div>
+
+      <div class="pending">
+        <p class="t">The scenes, and what RDE measures</p>
+        <p>A tour of the three scenes, and the depth-map pair the Removal Depth Error is read from.</p>
+        <p class="tag">Coming soon</p>
+      </div>
+
+      <div class="tbl-wrap">
+        <table class="tbl pair">
+          <caption>mRDE is the removal depth error; mIoU is reported alongside it to catch
+          selection outside the target region. Mean over the three scenes.</caption>
+          <thead>
+            <tr>
+              <th class="grp" colspan="3" scope="col">Self-supervised</th>
+              <th class="grp" colspan="3" scope="col">Supervised</th>
+            </tr>
+            <tr>
+              <th scope="col">Method</th><th scope="col">mIoU &uarr;</th><th scope="col">mRDE &darr;</th>
+              <th scope="col">Method</th><th scope="col">mIoU &uarr;</th><th scope="col">mRDE &darr;</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>OpenGaussian</td><td>52.87</td><td>39.31</td><td>Gaussian Grouping</td><td>26.23</td><td>50.05</td></tr>
+            <tr class="ours"><td>+ VODA</td><td>60.90</td><td>27.34</td><td>+ VODA</td><td>30.18</td><td>38.12</td></tr>
+            <tr class="grp"><td>LaGa</td><td>75.93</td><td>36.93</td><td>ILGS</td><td>31.66</td><td>49.98</td></tr>
+            <tr class="ours"><td>+ VODA</td><td>79.07</td><td>21.66</td><td>+ VODA</td><td>38.75</td><td>35.65</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+      <div class="qhead">
+        <h3>Qualitative</h3>
+        <p>Each card wipes from the selected mask to the scene once those Gaussians are removed. What a method leaves behind shows up as a <b>smear where the object was</b>.</p>
+      </div>
+
+      <div class="rowhead">
+        <div class="carousel" data-grid="r3d-grid" data-view-body="r3d-video" aria-label="Removal-3D query">
+          <button class="cr-btn" type="button" data-step="-1" aria-label="Previous"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+          <button class="cr-btn" type="button" data-step="1" aria-label="Next"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+          <div class="cr-dots" role="tablist" aria-label="Removal-3D query">
+            <button class="cr-dot" type="button" role="tab" data-value="hamburger_kitchen" data-label="hamburger" aria-selected="true" aria-label="hamburger"></button>
+            <button class="cr-dot" type="button" role="tab" data-value="toy_duck" data-label="toy duck" aria-selected="false" aria-label="toy duck"></button>
+          </div>
+          <span class="cr-name">hamburger</span>
+        </div>
+        <span class="hint" data-view-body="r3d-video">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v12M4.5 5.5 2 8l2.5 2.5M11.5 5.5 14 8l-2.5 2.5"/></svg>
+          drag to wipe both at once
+        </span>
+        <div class="switch" role="group" aria-label="Removal-3D figure" data-view-group="r3d">
+          <span class="knob" aria-hidden="true"></span>
+          <button type="button" data-view="r3d-video" aria-pressed="true">Videos</button>
+          <button type="button" data-view="r3d-paper" aria-pressed="false">Paper figure</button>
+        </div>
+      </div>
+      <div class="mgrid two" id="r3d-grid" data-view-body="r3d-video">
+        <div class="mcard">
+          <div class="cmp">
+            <video class="under" data-src="assets/video/r3d/{scene}_base.mp4" muted loop playsinline preload="none"></video>
+            <video class="over" data-src="assets/video/r3d/{scene}_base_seg.mp4" muted loop playsinline preload="none"></video>
+            <span class="cmp-tag l">Segmented</span>
+            <span class="cmp-tag r">Removed</span>
+            <span class="cmp-line"></span>
+          </div>
+          <p class="mcap"><b>Mask to removal</b><span class="tag">baseline</span></p>
+        </div>
+        <div class="mcard ours">
+          <div class="cmp">
+            <video class="under" data-src="assets/video/r3d/{scene}_ours.mp4" muted loop playsinline preload="none"></video>
+            <video class="over" data-src="assets/video/r3d/{scene}_ours_seg.mp4" muted loop playsinline preload="none"></video>
+            <span class="cmp-tag l">Segmented</span>
+            <span class="cmp-tag r">Removed</span>
+            <span class="cmp-line"></span>
+          </div>
+          <p class="mcap"><b>Mask to removal</b><span class="tag">+ VODA</span></p>
+        </div>
+      </div>
+
+      <figure class="figure" data-view-body="r3d-paper" hidden>
+        <img src="assets/fig/removal3d_qual.jpg" alt="Qualitative results on Removal-3D across four baselines." loading="lazy" width="2800" height="1343">
+        <figcaption><b>Paper figure 6.</b> All four baselines on both scenes, each rendered after
+        the queried Gaussians are removed.</figcaption>
+      </figure>
+  </div>
+</section>
+
+
+<!-- ==================== ANALYSIS ==================== -->
+<section class="sec" id="analysis">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Analysis</h2>
+      <p class="lede">
+        <span class="u">Two questions decide whether the diagnosis holds:</span> which Gaussians
+        VODA actually recovers, and whether a simpler fix would have done the same job.
+      </p>
+    </div>
+
+    <div class="subsec">
+      <h3 class="ask">
+        <button type="button" aria-expanded="false" aria-controls="note-recover">
+          Which Gaussians does VODA recover?
+          <span class="mark" aria-hidden="true">?</span>
+        </button>
+      </h3>
+      <div class="fold" id="note-recover">
+       <div>
+        <div class="aside">
+          <span class="q" aria-hidden="true">?</span>
+          <p>
+            <b>Two things have to hold at once.</b> VODA has to be picking out genuinely
+            low-contribution Gaussians, the ones rendered supervision never reaches, rather than
+            just selecting more of what was already visible. And it has to do that while
+            accuracy goes up, not by trading precision for recall. The first is testable because
+            the two checkpoints share identical geometry and opacity, so every Gaussian's maximum
+            contribution is fixed before either method runs; the second is why mIoU is reported
+            beside mRDE everywhere above.
+          </p>
+        </div>
+       </div>
+      </div>
+
+      <figure class="figure">
+        <img src="assets/fig/distribution.jpg" alt="Cumulative distribution of maximum rendering contribution for baseline-selected Gaussians versus those recovered only by VODA, on three Removal-3D scenes." loading="lazy" width="1800" height="564">
+        <figcaption>
+          The recovered set sits consistently to the left. At the rasterization cutoff
+          <span class="mono">w = 1/255</span>, <b>17 to 36%</b> of it falls below the threshold,
+          10 to 16 points more than among the baseline-selected set. Those Gaussians also appear
+          in roughly <b>6&times; fewer pixels</b> and <b>3&times; fewer views</b>, and
+          <b>18.7%</b> receive zero gradient in every view. They are reached
+          <b>without giving anything up</b>: on Removal-3D every baseline gains mIoU in the same
+          run that lowers mRDE.
+        </figcaption>
+      </figure>
+    </div>
+
+    <div class="subsec">
+      <h3 class="ask">
+        <button type="button" aria-expanded="false" aria-controls="ask-note">
+          Can reweighting do the same job?
+          <span class="mark" aria-hidden="true">?</span>
+        </button>
+      </h3>
+      <div class="fold" id="ask-note">
+       <div>
+        <div class="aside">
+          <span class="q" aria-hidden="true">?</span>
+          <p>
+            <b>The question underneath is whether this problem is hard at all.</b> The obvious
+            objection is that a low-contribution Gaussian simply needs a bigger gradient. If that
+            were true, VODA would be unnecessary: rescaling the rendered-feature loss that already
+            exists would recover the same Gaussians. So we tried three such fixes, and report
+            every metric each one moves.
+          </p>
+        </div>
+       </div>
+      </div>
+
+      <div class="alt" id="alt">
+        <div class="seg" role="group" aria-label="Metric">
+          <button type="button" data-metric="0" aria-pressed="true">LERF mIoU &uarr;</button>
+          <button type="button" data-metric="1" aria-pressed="false">Removal-3D mIoU &uarr;</button>
+          <button type="button" data-metric="2" aria-pressed="false">Removal-3D mRDE &darr;</button>
+        </div>
+        <p class="alt-hint">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 5.5 8 10.5l5-5"/></svg>
+          Select a variant to read what it changes
+        </p>
+        <div class="chart-grid">
+          <div class="chartcard">
+            <h4>OpenGaussian</h4>
+            <ul class="bars" data-base="og"></ul>
+          </div>
+          <div class="chartcard">
+            <h4>Gaussian Grouping</h4>
+            <ul class="bars" data-base="gg"></ul>
+          </div>
+        </div>
+        <div class="fold" id="altfold">
+         <div>
+          <div class="altnote" id="altnote"></div>
+         </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ==================== APPLICATIONS ==================== -->
+<section class="sec tinted" id="applications">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Applications</h2>
+      <p class="lede">
+        <span class="u">Editing is where an incomplete set shows.</span> Every edit acts on the
+        selected Gaussians directly: paint a partial selection <b>red</b> and the original green
+        survives underneath, <b>lift it</b> and a ghost of the apple stays on the table.
+      </p>
+    </div>
+
+    <div class="rowhead">
+      <div class="tabs" role="tablist" aria-label="Edit">
+        <button class="tab op" role="tab" data-scene="green_apple_recolor" aria-selected="true">
+          <span class="k">Recolour</span><span class="d">green to red</span>
+        </button>
+        <button class="tab op" role="tab" data-scene="green_apple_resize_0.5" aria-selected="false">
+          <span class="k">Scale</span><span class="d">shrink by half</span>
+        </button>
+        <button class="tab op" role="tab" data-scene="green_apple_translate" aria-selected="false">
+          <span class="k">Translate</span><span class="d">lift upward</span>
+        </button>
+      </div>
+    </div>
+    <div class="mgrid two" id="edit-grid">
+      <div class="mcard">
+        <div class="mvid"><video data-src="assets/video/edit/{scene}_base.mp4" muted loop playsinline preload="none"></video></div>
+        <p class="mcap"><b>Edited</b><span class="tag">baseline</span></p>
+      </div>
+      <div class="mcard ours">
+        <div class="mvid"><video data-src="assets/video/edit/{scene}_ours.mp4" muted loop playsinline preload="none"></video></div>
+        <p class="mcap"><b>Edited</b><span class="tag">+ VODA</span></p>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ==================== BIBTEX ==================== -->
+<section class="sec" id="bibtex">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>BibTeX</h2>
+    </div>
+    <div class="pending">
+      <p class="tag">Coming soon</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>&copy; 2026 Jeonghwan Cho et al. &middot; Yonsei University</p>
+    <p class="credit">Page design adapted from the
+      <a href="https://choi-yeeun.github.io/MERIT/" target="_blank" rel="noopener">MERIT</a>
+      project page.</p>
+  </div>
+</footer>
+
 <script>
-/* Split the method line into characters so each can ride the hover wave
-   on its own delay. Purely decorative: the line reads the same without it. */
+/* ============================================================
+   1. Theme
+   ============================================================ */
+(function(){
+  var root = document.documentElement;
+  var btn = document.getElementById('theme-btn');
+  var sun = document.getElementById('icon-sun');
+  var moon = document.getElementById('icon-moon');
+  var meta = document.getElementById('theme-color');
+
+  /* Light is the default. Dark only happens when the visitor asks for it,
+     so the OS setting is deliberately not consulted. */
+  function isDark(){ return root.getAttribute('data-theme') === 'dark'; }
+  /* Assigning .hidden does nothing on an SVG element, so toggle the
+     attribute. The icon shows the theme you get by clicking. */
+  function show(el, visible){
+    if (visible) el.removeAttribute('hidden'); else el.setAttribute('hidden','');
+  }
+  function paint(){
+    var dark = isDark();
+    show(sun, dark); show(moon, !dark);
+    btn.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
+    if (meta) meta.setAttribute('content', dark ? '#141110' : '#FFFFFF');
+    window.dispatchEvent(new Event('voda:theme'));
+  }
+  paint();
+  btn.addEventListener('click', function(){
+    var next = isDark() ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('voda-theme', next); } catch (e) {}
+    paint();
+  });
+})();
+
+/* ============================================================
+   2. Title wave
+   ============================================================ */
 (function(){
   var name = document.querySelector('h1.title .name');
   if (!name) return;
@@ -409,43 +1442,489 @@ h1.title .name:hover .ch{animation:wave .95s ease-in-out infinite}
   }
 })();
 
-(function(){
-  var root = document.documentElement;
-  var btn = document.getElementById('theme-btn');
-  var sun = document.getElementById('icon-sun');
-  var moon = document.getElementById('icon-moon');
+/* ============================================================
+   3. Carousel picker
+   Arrows step, dots jump. The list lives in the markup, so adding a query is
+   one more dot and nothing here changes.
+   ============================================================ */
+function Carousel(el, onPick){
+  var dots = [].slice.call(el.querySelectorAll('.cr-dot'));
+  var name = el.querySelector('.cr-name');
+  if (!dots.length || !name) return null;
+  var at = 0;
+  dots.forEach(function(d, k){ if (d.getAttribute('aria-selected') === 'true') at = k; });
 
-  var meta = document.getElementById('theme-color');
-
-  /* Light is the default. Dark only happens when the visitor asks for it,
-     so the OS setting is deliberately not consulted. */
-  function isDark(){
-    return root.getAttribute('data-theme') === 'dark';
-  }
-  /* Assigning .hidden does nothing on an SVG element, so toggle the
-     attribute. Dark shows the sun, light shows the moon: the icon is the
-     theme you get by clicking, and only one is ever in the button. */
-  function show(el, visible){
-    if (visible) el.removeAttribute('hidden');
-    else el.setAttribute('hidden', '');
-  }
   function paint(){
-    var dark = isDark();
-    show(sun, dark);
-    show(moon, !dark);
-    btn.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
-    if (meta) meta.setAttribute('content', dark ? '#131110' : '#FFFFFF');
+    dots.forEach(function(d, k){ d.setAttribute('aria-selected', String(k === at)); });
+    name.innerHTML = dots[at].dataset.label;
+  }
+  function go(k, fire){
+    at = (k % dots.length + dots.length) % dots.length;
+    paint();
+    if (fire) onPick(dots[at].dataset.value);
+  }
+  el.addEventListener('click', function(e){
+    var b = e.target.closest('button');
+    if (!b) return;
+    if (b.classList.contains('cr-dot')) go(dots.indexOf(b), true);
+    else if (b.dataset.step) go(at + parseInt(b.dataset.step, 10), true);
+  });
+  /* hovering a dot is a good sign the clip is about to be asked for */
+  el.addEventListener('pointerover', function(e){
+    var b = e.target.closest('.cr-dot');
+    if (b && b.getAttribute('aria-selected') !== 'true') onPick(b.dataset.value, true);
+  });
+  paint();
+  return {value: function(){ return dots[at].dataset.value; }};
+}
+
+/* ============================================================
+   4. Videos: load and play only what is on screen
+   ============================================================ */
+var VideoPool = (function(){
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      var v = e.target;
+      if (e.isIntersecting){
+        if (!v.src && v.dataset.src) v.src = v.dataset.src;
+        var p = v.play(); if (p && p.catch) p.catch(function(){});
+      } else if (!v.paused) {
+        v.pause();
+      }
+    });
+  }, {rootMargin: '200px 0px', threshold: 0.1});
+
+  document.querySelectorAll('video[data-src]').forEach(function(v){ io.observe(v); });
+
+  var asked = {};
+  function prefetch(url){
+    if (asked[url]) return;
+    asked[url] = 1;
+    var l = document.createElement('link');
+    l.rel = 'prefetch';
+    l.as = 'video';
+    l.href = url;
+    document.head.appendChild(l);
+  }
+  function sceneUrls(gridId, scene){
+    return [].slice.call(document.querySelectorAll('#' + gridId + ' video')).map(function(v){
+      var tpl = v.getAttribute('data-tpl') || v.dataset.src;
+      return tpl.replace('{scene}', scene);
+    });
   }
 
-  /* data-theme was already applied by the head script. */
-  paint();
+  function setScene(gridId, scene){
+    document.querySelectorAll('#' + gridId + ' video').forEach(function(v){
+      var tpl = v.getAttribute('data-tpl') || v.dataset.src;
+      v.setAttribute('data-tpl', tpl);
+      var next = tpl.replace('{scene}', scene);
+      v.dataset.src = next;
+      v.src = next;
+      v.load();
+      var p = v.play(); if (p && p.catch) p.catch(function(){});
+    });
+  }
+  return {setScene: setScene, prefetch: prefetch, sceneUrls: sceneUrls};
+})();
 
-  btn.addEventListener('click', function(){
-    var next = isDark() ? 'light' : 'dark';
-    root.setAttribute('data-theme', next);
-    try { localStorage.setItem('voda-theme', next); } catch (e) {}
-    paint();
+[['motiv-grid','green_apple'], ['r3d-grid','hamburger_kitchen'], ['edit-grid','green_apple_recolor']]
+.forEach(function(pair){
+  var grid = document.getElementById(pair[0]);
+  if (!grid) return;
+  VideoPool.setScene(pair[0], pair[1]);
+
+  var car = document.querySelector('.carousel[data-grid="' + pair[0] + '"]');
+  if (car){
+    Carousel(car, function(scene, warmOnly){
+      if (warmOnly) VideoPool.sceneUrls(pair[0], scene).forEach(VideoPool.prefetch);
+      else VideoPool.setScene(pair[0], scene);
+    });
+    return;
+  }
+
+  var tabs = grid.parentNode.querySelector('.tabs');
+  if (!tabs) return;
+  tabs.addEventListener('click', function(e){
+    var b = e.target.closest('.tab'); if (!b) return;
+    tabs.querySelectorAll('.tab').forEach(function(t){ t.setAttribute('aria-selected', String(t === b)); });
+    VideoPool.setScene(pair[0], b.dataset.scene);
   });
+  tabs.addEventListener('pointerover', function(e){
+    var b = e.target.closest('.tab');
+    if (!b || b.getAttribute('aria-selected') === 'true') return;
+    VideoPool.sceneUrls(pair[0], b.dataset.scene).forEach(VideoPool.prefetch);
+  });
+});
+
+/* ============================================================
+   5. Before / after wipe, synced across the row
+   ============================================================ */
+document.querySelectorAll('.mgrid').forEach(function(grid){
+  var cmps = [].slice.call(grid.querySelectorAll('.cmp'));
+  if (!cmps.length) return;
+
+  function set(e){
+    var host = e.target.closest('.cmp');
+    if (!host) return;
+    var r = host.getBoundingClientRect();
+    var p = Math.max(0, Math.min(100, (e.clientX - r.left) / r.width * 100));
+    cmps.forEach(function(c){ c.style.setProperty('--pos', p + '%'); });
+  }
+  grid.addEventListener('pointermove', set);
+  grid.addEventListener('pointerdown', set);
+
+});
+
+
+/* Independent <video> elements decode at their own pace, so over a long loop a
+   row drifts apart by a few frames. Each grid follows one clip as its clock,
+   which also lines the panels back up after one of them was scrolled away and
+   paused. */
+document.querySelectorAll('.mgrid').forEach(function(grid){
+  var vids = [].slice.call(grid.querySelectorAll('video'));
+  if (vids.length < 2) return;
+  setInterval(function(){
+    if (document.hidden) return;
+    var lead = vids[0];
+    if (lead.paused || lead.readyState < 2) return;
+    var t = lead.currentTime;
+    for (var i = 1; i < vids.length; i++){
+      var v = vids[i];
+      if (v.readyState < 2 || v.seeking || v.paused) continue;
+      if (Math.abs(v.currentTime - t) > 0.18){
+        try { v.currentTime = t; } catch (err) {}
+      }
+    }
+  }, 1000);
+});
+
+/* ============================================================
+   6. Contribution-based alternatives
+   Every value is printed in the paper's Table 6.
+   ============================================================ */
+(function(){
+  /* Table 6: every metric the paper reports for the alternatives.
+     Columns are LERF mIoU, Removal-3D mIoU, Removal-3D mRDE. */
+  var METRIC = [
+    {max:50, better:'up'},
+    {max:65, better:'up'},
+    {max:80, better:'down'}
+  ];
+  var ALT = {
+    og: [
+      ['Baseline',  [37.12, 52.87, 39.3], 0],
+      ['Normalize', [24.61, 17.1,  72.7], 0],
+      ['Clamp',     [35.94, 13.4,  69.4], 0],
+      ['KNN',       [30.28, 17.9,  73.3], 0],
+      ['+ VODA',    [42.98, 60.90, 27.3], 1]
+    ],
+    gg: [
+      ['Baseline',  [22.75, 26.23, 50.0], 0],
+      ['Normalize', [34.03,  1.6,  48.7], 0],
+      ['Clamp',     [31.42,  1.5,  52.2], 0],
+      ['KNN',       [12.24,  1.5,  54.7], 0],
+      ['+ VODA',    [43.73, 30.18, 38.1], 1]
+    ]
+  };
+  var NOTE = {
+    'Baseline': 'The unmodified baseline. Everything below keeps the rendered-feature loss and only changes how its gradient reaches each Gaussian.',
+    'Normalize': 'Divides each Gaussian’s rendered-supervision gradient by its accumulated contribution, so weak contributors get an amplified update. On Gaussian Grouping it does nudge mRDE down, from <b>50.0 to 48.7</b>, but mIoU collapses from <b>26.23 to 1.6</b>.',
+    'Clamp': 'Bounds that amplification toward the median scale, to stop the weakest contributors from dominating. It stays closer to the baseline on LERF, yet still loses most of the Removal-3D mIoU.',
+    'KNN': 'Bypasses rendering entirely and copies features from nearby high-contribution Gaussians. Proximity is not membership, so it crosses object boundaries.',
+    '+ VODA': 'Selects a depth cluster and supervises each of its Gaussians directly. <b>Contribution measures visibility, not object membership</b>, which is why reweighting alone cannot reach the same place.'
+  };
+
+  (function(){
+    var host = document.getElementById('alt');
+    if (!host) return;
+    var note = document.getElementById('altnote');
+    var m = 0, open = null;   /* nothing is expanded until asked for */
+
+    var fold = document.getElementById('altfold');
+
+    function paintNote(){
+      if (open === null){
+        fold.classList.remove('open');
+      } else {
+        note.innerHTML = '<span class="who">' + open + '</span>' + NOTE[open];
+        fold.classList.add('open');
+      }
+      host.querySelectorAll('.bar').forEach(function(b){
+        b.setAttribute('aria-expanded', String(open !== null && b.dataset.name === open));
+      });
+    }
+
+    function build(){
+      host.querySelectorAll('ul.bars').forEach(function(ul){
+        var rows = ALT[ul.dataset.base];
+        ul.innerHTML = '';
+        rows.forEach(function(r){
+          var li = document.createElement('li');
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'bar' + (r[2] ? ' ours' : '');
+          btn.dataset.name = r[0];
+          btn.setAttribute('aria-expanded', String(r[0] === open));
+          btn.innerHTML =
+            '<span class="nm">' + r[0] + '</span>' +
+            '<span class="track"><span class="fill" style="width:' +
+              Math.max(1.5, r[1][m] / METRIC[m].max * 100).toFixed(1) + '%"></span></span>' +
+            '<span class="vl">' + r[1][m].toFixed(2) + '</span>' +
+            '<span class="go" aria-hidden="true">›</span>';
+          /* selecting the open row again folds the panel away */
+          btn.addEventListener('click', function(){
+            open = (open === r[0]) ? null : r[0];
+            paintNote();
+          });
+          li.appendChild(btn);
+          ul.appendChild(li);
+        });
+      });
+      paintNote();
+    }
+
+    host.querySelectorAll('.seg button').forEach(function(b){
+      b.addEventListener('click', function(){
+        m = parseInt(b.dataset.metric, 10);
+        host.querySelectorAll('.seg button').forEach(function(o){
+          o.setAttribute('aria-pressed', String(o === b));
+        });
+        build();
+      });
+    });
+    build();
+  })();
+
+})();
+
+/* ============================================================
+   7. Benchmark panels
+   Which scene and which baseline are shown is decided here rather than baked
+   into the markup, so adding a query means adding a tab and its images.
+   ============================================================ */
+(function(){
+  var LERF = {
+    pikachu:    {m: 'opengs', label: 'OpenGaussian'},
+    ottolenghi: {m: 'laga',   label: 'LaGa'},
+    duck:       {m: 'gg',     label: 'Gaussian Grouping'},
+    icecream:   {m: 'ilgs',   label: 'ILGS'}
+  };
+  var SCAN = {bed: {w: 393, h: 322}, sofa: {w: 452, h: 296}};
+  var METHOD = {laga: 'LaGa', opengs: 'OpenGaussian'};
+
+  function shots(row){ return [].slice.call(row.querySelectorAll('.zbox img')); }
+  function tag(row, i){ return row.querySelectorAll('.mcap .tag')[i]; }
+  function onQuery(gridId, pick){
+    var car = document.querySelector('.carousel[data-zoomgrid="' + gridId + '"]');
+    if (car) Carousel(car, function(v, warmOnly){ if (!warmOnly) pick(v); });
+  }
+
+
+  /* Every scene of a benchmark is a handful of stills, so they are fetched as
+     soon as the row is near the viewport. Switching a query then costs nothing.
+     Video scenes are far heavier, so those are only warmed on hover, when a
+     click is likely. */
+  function warm(urls){
+    urls.forEach(function(u){
+      var im = new Image();
+      im.decoding = 'async';
+      im.src = u;
+    });
+  }
+  function warmWhenNear(row, urls){
+    if (!row || !('IntersectionObserver' in window)) return;
+    var io = new IntersectionObserver(function(es){
+      if (!es[0].isIntersecting) return;
+      io.disconnect();
+      warm(urls);
+    }, {rootMargin: '700px 0px'});
+    io.observe(row);
+  }
+
+  var lerf = document.getElementById('lerf-zoom');
+  if (lerf) {
+    onQuery('lerf-zoom', function(scene){
+      var c = LERF[scene]; if (!c) return;
+      var im = shots(lerf), dir = 'assets/img/lerf/';
+      im[0].src = dir + scene + '_gt.jpg';
+      im[1].src = dir + scene + '_' + c.m + '_org.jpg';
+      im[2].src = dir + scene + '_' + c.m + '_voda.jpg';
+      tag(lerf, 1).textContent = c.label;
+    });
+    var urls = [];
+    Object.keys(LERF).forEach(function(k){
+      var m = LERF[k].m, dir = 'assets/img/lerf/';
+      urls.push(dir + k + '_gt.jpg', dir + k + '_' + m + '_org.jpg', dir + k + '_' + m + '_voda.jpg');
+    });
+    warmWhenNear(lerf, urls);
+  }
+
+  var scan = document.getElementById('scannet-zoom');
+  if (scan) {
+    var scene = 'bed', method = 'opengs';
+    function draw(){
+      var d = SCAN[scene], im = shots(scan), dir = 'assets/img/scannet/';
+      var part = ['_mesh', '_gt', '_' + method + '_org', '_' + method + '_voda'];
+      im.forEach(function(el, i){
+        el.src = dir + scene + part[i] + '.jpg';
+        el.setAttribute('width', d.w);
+        el.setAttribute('height', d.h);
+      });
+      tag(scan, 2).textContent = METHOD[method];
+    }
+    onQuery('scannet-zoom', function(next){ scene = next; draw(); });
+    var seg = scan.previousElementSibling;
+    while (seg && !(seg.querySelector && seg.querySelector('[data-method]'))) seg = seg.previousElementSibling;
+    if (seg) seg.addEventListener('click', function(e){
+      var b = e.target.closest('[data-method]'); if (!b) return;
+      seg.querySelectorAll('[data-method]').forEach(function(t){
+        t.setAttribute('aria-pressed', String(t === b));
+      });
+      method = b.dataset.method;
+      draw();
+    });
+    var urls = [];
+    Object.keys(SCAN).forEach(function(sc){
+      Object.keys(METHOD).forEach(function(m){
+        var dir = 'assets/img/scannet/';
+        urls.push(dir + sc + '_mesh.jpg', dir + sc + '_gt.jpg',
+                  dir + sc + '_' + m + '_org.jpg', dir + sc + '_' + m + '_voda.jpg');
+      });
+    });
+    warmWhenNear(scan, urls);
+  }
+
+
+  /* One benchmark in the frame at a time. */
+  document.querySelectorAll('.switch').forEach(function(sw){
+    var knob = sw.querySelector('.knob');
+    var btns = [].slice.call(sw.querySelectorAll('[data-view]'));
+    var views = btns.map(function(b){
+      return [].slice.call(document.querySelectorAll('[data-view-body="' + b.dataset.view + '"]'));
+    });
+    if (views.some(function(v){ return !v.length; })) return;
+
+    function place(){
+      var on = sw.querySelector('[aria-pressed="true"]');
+      knob.style.width = on.offsetWidth + 'px';
+      knob.style.transform = 'translateX(' + on.offsetLeft + 'px)';
+    }
+    function show(view, animate){
+      btns.forEach(function(b, i){
+        var on = b.dataset.view === view;
+        b.setAttribute('aria-pressed', String(on));
+        views[i].forEach(function(el){
+          el.hidden = !on;
+          if (!on || !animate) return;
+          el.classList.remove('viewin');
+          void el.offsetWidth;
+          el.classList.add('viewin');
+        });
+      });
+      place();
+    }
+
+    sw.addEventListener('click', function(e){
+      var b = e.target.closest('[data-view]');
+      if (b && b.getAttribute('aria-pressed') !== 'true') show(b.dataset.view, true);
+    });
+    show(btns[0].dataset.view, false);
+    /* the labels settle once the webfont lands, so measure again */
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(place);
+    window.addEventListener('resize', place);
+  });
+
+  /* One pointer drives every panel in the row: same point, same scale, so
+     the panels stay comparable while magnified. */
+  var fine = window.matchMedia('(hover: hover) and (pointer: fine)');
+  document.querySelectorAll('[data-zoom]').forEach(function(row){
+    if (!fine.matches) return;
+    var z = parseFloat(row.dataset.zoom) || 2.4;
+    /* stills in a .zbox, clips in a .mvid; a panel marked no-loupe is a fixed
+       reference and stays put while the others magnify */
+    var im = [].slice.call(row.querySelectorAll(
+      '.zbox img, .mvid:not(.no-loupe) > video, .mvid:not(.no-loupe) > img'));
+    if (!im.length) return;
+    row.addEventListener('pointermove', function(e){
+      var box = e.target.closest('.zbox, .mvid');
+      if (!box || box.classList.contains('no-loupe')) return;
+      var r = box.getBoundingClientRect();
+      var x = Math.min(100, Math.max(0, (e.clientX - r.left) / r.width * 100));
+      var y = Math.min(100, Math.max(0, (e.clientY - r.top) / r.height * 100));
+      im.forEach(function(el){
+        el.style.transformOrigin = x + '% ' + y + '%';
+        el.style.transform = 'scale(' + z + ')';
+      });
+    });
+    row.addEventListener('pointerleave', function(){
+      im.forEach(function(el){ el.style.transform = ''; });
+    });
+  });
+
+})();
+
+/* ============================================================
+   8. Folded framing notes
+   ============================================================ */
+document.querySelectorAll('.ask button').forEach(function(btn){
+  var note = document.getElementById(btn.getAttribute('aria-controls'));
+  if (!note) return;
+  btn.addEventListener('click', function(){
+    var openNow = btn.getAttribute('aria-expanded') === 'true';
+    btn.setAttribute('aria-expanded', String(!openNow));
+    note.classList.toggle('open', !openNow);
+  });
+});
+
+/* ============================================================
+   9. Ease blocks in as they arrive
+   Applied from script, so the page with JavaScript off is never left
+   with hidden content; anything already on screen is shown at once.
+   ============================================================ */
+(function(){
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (!('IntersectionObserver' in window)) return;
+
+  var items = document.querySelectorAll(
+    '.sec > .wrap > .figure, .sec > .wrap > .tbl-wrap, .sec > .wrap > .mgrid,' +
+    '.sec > .wrap > .pending, .sec > .wrap > .contrib, .sec > .wrap > .subsec,' +
+    '.sec > .wrap > .zhint,' +
+    '.sec > .wrap > .rowhead, .sec > .wrap > .sec-head, .sec > .wrap > .summary,' +
+    /* Results nests its blocks inside .bench, one level deeper */
+    '.bench > .bench-head, .bench > .subsec, .bench > .pending, .bench > .qhead,' +
+    '.bench > .rowhead, .bench > .mgrid, .bench > .tbl-wrap,' +
+    '.bench > .figure'
+  );
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if (!e.isIntersecting) return;
+      e.target.classList.add('in');
+      io.unobserve(e.target);
+    });
+  }, {rootMargin: '0px 0px -8% 0px', threshold: 0.05});
+
+  items.forEach(function(el){
+    var r = el.getBoundingClientRect();
+    if (r.top < window.innerHeight) { el.classList.add('reveal', 'in'); return; }
+    el.classList.add('reveal');
+    io.observe(el);
+  });
+})();
+
+/* ============================================================
+   10. Nav highlight
+   ============================================================ */
+(function(){
+  var links = [].slice.call(document.querySelectorAll('.nav-link'));
+  var secs = links.map(function(a){ return document.querySelector(a.getAttribute('href')); });
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if (!e.isIntersecting) return;
+      var i = secs.indexOf(e.target);
+      links.forEach(function(a, k){ a.classList.toggle('current', k === i); });
+    });
+  }, {rootMargin: '-45% 0px -50% 0px'});
+  secs.forEach(function(s){ if (s) io.observe(s); });
 })();
 </script>
 
